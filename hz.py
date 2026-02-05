@@ -1,3 +1,4 @@
+import streamlit as st  # <--- 必须加上这一行！
 import requests
 import json
 import base64
@@ -21,6 +22,10 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 import urllib3
 
+# 禁用SSL警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ... (中间的函数代码保持不变，不要动) ...
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -12119,35 +12124,45 @@ def listen_exit():
         print("✅ 所有线程池已关闭，程序即将退出")
 
 # ------------------ 主函数 ------------------
+# ... (上面是你的 PLATFORMS 列表，不要动) ...
+
+# ------------------ 主函数 (Streamlit 网页版适配) ------------------
 if __name__ == "__main__":
-    # 禁用SSL证书验证警告
-    requests.packages.urllib3.disable_warnings()
+    # 设置网页标题和图标
+    st.set_page_config(page_title="Python 接口测试工具", page_icon="🚀")
 
-    # 输入手机号验证
-    mobile = input("请输入手机号: ").strip()
-    if not mobile or len(mobile) != 11 or not mobile.isdigit():
-        sys.exit("❌ 手机号格式错误！请输入11位数字")
+    st.title("🚀 Python 接口测试工具 (Web版)")
+    st.markdown("---")
 
-    # 打印启动信息
-    with print_lock:
-        print(f"手机号: {mobile}")
-        print("回车可退出程序\n")
+    # 1. 创建左侧侧边栏说明
+    with st.sidebar:
+        st.header("📖 使用说明")
+        st.info("1. 在右侧输入手机号\n2. 点击【开始运行】\n3. 程序将在后台自动启动线程\n4. 请勿关闭此网页")
+        st.warning("⚠️ 注意：详细的运行日志（print输出）不会显示在网页上，请点击右下角的 'Manage app' -> 'Logs' 查看黑色控制台。")
 
-    # 启动退出监听线程（非守护线程，确保能捕获输入）
-    exit_thread = threading.Thread(target=listen_exit, daemon=False)
-    exit_thread.start()
+    # 2. 获取手机号 (网页输入框)
+    mobile = st.text_input("请输入目标手机号:", max_chars=11, help="请输入11位中国大陆手机号")
 
-    # 启动平台任务线程（守护线程）
-    threading.Thread(target=platform_sequential_worker, args=(mobile,), daemon=True).start()
+    # 3. 运行按钮
+    if st.button("🔥 开始运行", type="primary"):
+        # 校验手机号
+        if not mobile or len(mobile) != 11 or not mobile.isdigit():
+            st.error("❌ 手机号格式错误！请输入11位数字")
+        else:
+            st.success(f"✅ 任务已启动！目标号码: {mobile}")
+            st.info("🔄 程序正在后台运行中... 请观察右侧黑色控制台的日志输出。")
+            
+            # 初始化线程池（如果尚未初始化）
+            # 注意：Streamlit 每次点击按钮都会重新运行脚本，所以这里直接启动线程即可
+            # 使用 daemon=True 守护线程，防止网页关闭后线程僵死
+            
+            # 启动打印监听（虽然网页看不了print，但为了保持逻辑完整保留）
+            if not any(t.name == "ExitThread" for t in threading.enumerate()):
+                exit_thread = threading.Thread(target=listen_exit, daemon=True, name="ExitThread")
+                exit_thread.start()
 
-    # 启动分钟循环主控线程（守护线程）
-    threading.Thread(target=minute_worker, args=(mobile,), daemon=True).start()
+            # 启动平台任务线程
+            threading.Thread(target=platform_sequential_worker, args=(mobile,), daemon=True).start()
 
-    # 主线程等待退出线程完成
-    exit_thread.join()
-
-    # 最终输出
-    with print_lock:
-        print("\n" + "="*60)
-        print("程序已正常终止！")
-        print("="*60)
+            # 启动分钟循环主控线程
+            threading.Thread(target=minute_worker, args=(mobile,), daemon=True).start()
